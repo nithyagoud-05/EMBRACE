@@ -1,0 +1,204 @@
+#define BLYNK_TEMPLATE_ID "TMPL3gjYn04gM"
+#define BLYNK_TEMPLATE_NAME "Embrace"
+#define BLYNK_AUTH_TOKEN "pMRUlnRblsA4ZMoCe653iz2dxx18MyB3"
+
+#define BLYNK_PRINT Serial
+#include <WiFi.h>
+#include <WiFiClient.h>
+#include <BlynkSimpleEsp32.h>
+#include <Wire.h>
+#include "MAX30100_PulseOximeter.h"   //SCL=D22,SDA=D21
+#include <SPI.h>
+#include <DHT.h>
+#define BUZZ   2 
+#define DHTPIN 32
+#define DHTTYPE DHT11
+DHT dht(DHTPIN, DHTTYPE); //Defining the pin and the dhttype
+#include <SoftwareSerial.h>
+#define MYPORT_TX 18
+#define MYPORT_RX 4
+EspSoftwareSerial::UART mySerial;
+char auth[] = "pMRUlnRblsA4ZMoCe653iz2dxx18MyB3";
+char ssid[] = "Pranavi";
+char pass[] = "bcde@123";
+
+int gsrValue = 0;
+
+int t=0;
+int cnt=0;
+int spo2=0;
+int bpm=0;
+int cnt1=0;
+int tempcnt=0;
+int gsrcnt=0;
+int spcnt=0;
+String a;
+int x1=0;
+int x2=0;
+int x3=0;
+int x4=0;
+#define REPORTING_PERIOD_MS     1000
+PulseOximeter pox;
+uint32_t tsLastReport = 0;
+int i=0;
+void onBeatDetected()
+{
+    Serial.println("Beat Detected!");
+}
+WidgetLED led1(V4);
+WidgetLED led2(V5);
+WidgetLED led3(V6);
+
+void setup() {
+ 
+  Serial.begin(115200);
+  pinMode(BUZZ, OUTPUT);
+  digitalWrite(BUZZ, LOW); 
+  Blynk.begin(auth, ssid, pass);     
+  dht.begin();    
+  mySerial.begin(9600, SWSERIAL_8N1, MYPORT_RX, MYPORT_TX, false);  
+  Serial.print("Initializing pulse oximeter..");
+    if (!pox.begin()) {
+        Serial.println("FAILED");
+        for(;;);
+    } else {
+        Serial.println("SUCCESS");
+    }
+    pox.setOnBeatDetectedCallback(onBeatDetected); 
+  Blynk.run(); 
+}
+ 
+void loop() {
+
+  if(cnt==10)
+  {
+  digitalWrite(BUZZ, LOW);      
+  cnt=0;
+for(i=0;i<=2;i++)
+{    
+  if (mySerial.available() > 0) 
+  {
+    a= mySerial.readString();// read the incoming data as string
+    Serial.println(a);
+    if (a[0]=='Z') 
+    {
+    x1=a[1]-48;
+    x2=a[2]-48;
+    x3=a[3]-48;
+    x4=a[4]-48;        
+    gsrValue=((x1*1000)+(x2*100)+(x3*10)+x4);
+    Serial.print("GSR Value: ");
+    Serial.println(gsrValue);
+    Blynk.virtualWrite(V0, gsrValue);  
+    }    
+  }
+  delay(50);
+  t = dht.readTemperature();
+  Serial.print("TEMPERATURE:");  
+  Serial.print(t);  
+  Serial.println('C'); 
+  Blynk.virtualWrite(V1, t);  
+}
+  if((t>36)||(t<28))
+  {
+  tempcnt=tempcnt+1;
+  Serial.print("tempcnt=");     
+  Serial.println(tempcnt);  
+  if(tempcnt>=6)
+  {
+  Serial.println("abnrml temp");     
+  digitalWrite(BUZZ, HIGH);
+  led1.on(); 
+  tempcnt=0;  
+  }    
+  }
+  else
+  {
+  led1.off(); 
+  tempcnt=0;     
+  }
+
+  if(spo2<90)
+  {
+  spcnt=spcnt+1;
+  Serial.print("spcnt=");    
+  Serial.println(spcnt);  
+  if(spcnt>=6)
+  {
+  Serial.println("abnrml spo2");     
+  digitalWrite(BUZZ, HIGH);
+  led2.on(); 
+  spcnt=0;  
+  }    
+  }
+  else
+  {
+  led2.off(); 
+  spcnt=0;     
+  }
+  
+  if(gsrValue>1000)
+  {
+  gsrcnt=gsrcnt+1;
+  Serial.print("gsrcnt=");    
+  Serial.println(gsrcnt);  
+  if(gsrcnt>=6)
+  {
+  Serial.println("abnrml gsr");     
+  digitalWrite(BUZZ, HIGH);
+  led3.on(); 
+  gsrcnt=0;  
+  }    
+  }
+  else
+  {
+  led3.off(); 
+  gsrcnt=0;     
+  }       
+    if (!pox.begin()) {
+        Serial.println("FAILED");
+        for(;;);
+    } else {
+        Serial.println("SUCCESS");
+    }
+   // pox.setIRLedCurrent(MAX30100_LED_CURR_7_6MA);
+    pox.setOnBeatDetectedCallback(onBeatDetected);   
+  }
+  
+
+      pox.update();
+    if (millis() - tsLastReport > REPORTING_PERIOD_MS) {
+        Serial.print("Heart rate:");
+        Serial.println(pox.getHeartRate());
+        bpm = (pox.getHeartRate());   
+        Blynk.virtualWrite(V3, bpm);                      
+        if((pox.getSpO2())==0)
+        {
+        cnt1=cnt1+1;    
+        if(cnt1==5)
+        {
+        Serial.print("SpO2:");         
+        Serial.print(pox.getSpO2());
+        Serial.println("%");
+        spo2 = pox.getSpO2(); 
+        Blynk.virtualWrite(V2, spo2);               
+        cnt1=0;          
+        }
+        }
+        else
+        {  
+        cnt1=0; 
+        Serial.print("SpO2:");                    
+        Serial.print(pox.getSpO2());
+        Serial.println("%");
+        spo2 = pox.getSpO2();   
+        Blynk.virtualWrite(V2, spo2);              
+        }
+                                            
+        tsLastReport = millis();
+        cnt=cnt+1;   
+
+         
+    }
+
+}
